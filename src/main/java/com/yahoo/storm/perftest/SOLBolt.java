@@ -16,15 +16,16 @@
 
 package com.yahoo.storm.perftest;
 
+import java.util.HashMap;
 import java.util.Map;
 
-import backtype.storm.task.OutputCollector;
-import backtype.storm.task.TopologyContext;
-import backtype.storm.topology.OutputFieldsDeclarer;
-import backtype.storm.topology.base.BaseRichBolt;
-import backtype.storm.tuple.Tuple;
-import backtype.storm.tuple.Fields;
-import backtype.storm.tuple.Values;
+import org.apache.storm.task.OutputCollector;
+import org.apache.storm.task.TopologyContext;
+import org.apache.storm.topology.OutputFieldsDeclarer;
+import org.apache.storm.topology.base.BaseRichBolt;
+import org.apache.storm.tuple.Tuple;
+import org.apache.storm.tuple.Fields;
+import org.apache.storm.tuple.Values;
 
 public class SOLBolt extends BaseRichBolt {
   private OutputCollector _collector;
@@ -40,7 +41,11 @@ public class SOLBolt extends BaseRichBolt {
 
   @Override
   public void execute(Tuple tuple) {
-    _collector.emit(tuple, new Values(tuple.getString(0)));
+    String name = String.valueOf(tuple.getValueByField("message"));
+    Map map = new HashMap();
+    map.put(name,System.currentTimeMillis());
+    if(name!=null)
+    _collector.emit(tuple, new Values(map));
     _collector.ack(tuple);
   }
 
@@ -50,6 +55,6 @@ public class SOLBolt extends BaseRichBolt {
 
   @Override
   public void declareOutputFields(OutputFieldsDeclarer declarer) {
-    declarer.declare(new Fields("message"));
+    declarer.declare(new Fields("map"));
   }
 }
