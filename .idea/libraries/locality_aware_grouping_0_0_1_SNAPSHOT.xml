@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="locality-aware-grouping-0.0.1-SNAPSHOT">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/src/libs/locality-aware-grouping-0.0.1-SNAPSHOT.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

@@ -26,6 +26,8 @@ import org.apache.storm.topology.base.BaseRichBolt;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Values;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SOLBolt extends BaseRichBolt {
   private OutputCollector _collector;
@@ -41,11 +43,7 @@ public class SOLBolt extends BaseRichBolt {
 
   @Override
   public void execute(Tuple tuple) {
-    String name = String.valueOf(tuple.getValueByField("message"));
-    Map map = new HashMap();
-    map.put(name,System.currentTimeMillis());
-    if(name!=null)
-    _collector.emit(tuple, new Values(map));
+    _collector.emit(tuple, new Values(tuple.getString(0)));
     _collector.ack(tuple);
   }
 
@@ -55,6 +53,6 @@ public class SOLBolt extends BaseRichBolt {
 
   @Override
   public void declareOutputFields(OutputFieldsDeclarer declarer) {
-    declarer.declare(new Fields("map"));
+    declarer.declare(new Fields("message"));
   }
 }

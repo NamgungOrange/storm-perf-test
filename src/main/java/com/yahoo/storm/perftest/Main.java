@@ -18,6 +18,10 @@ package com.yahoo.storm.perftest;
 
 import java.util.Map;
 
+import org.apache.storm.topology.BoltDeclarer;
+import org.locality.aware.grouping.MyShuffleGrouping;
+import org.locality.aware.grouping.PerformanceLoggingBolt;
+import org.locality.aware.grouping.TupleGeneratorSpout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.kohsuke.args4j.CmdLineException;
@@ -38,6 +42,8 @@ import org.apache.storm.generated.TopologyInfo;
 import org.apache.storm.generated.ExecutorSummary;
 import org.apache.storm.generated.ExecutorStats;
 import org.apache.storm.generated.SpoutStats;
+import org.locality.aware.grouping.LocalityAwareGrouping;
+
 
 public class Main {
   private static final Logger LOG = LoggerFactory.getLogger(Main.class);
@@ -93,9 +99,13 @@ public class Main {
   @Option(name="--pollFreqSec", aliases={"--pollFreq"}, metaVar="POLL",
       usage="How often should metrics be collected")
   private int _pollFreqSec = 30;
-  
+
+  @Option(name="--zookeeper", aliases={"--zk"}, metaVar="ZOOKEEPER", usage="locality-aware-grouping needs zookeeper addr and port")
+  private String zookeeper_connect_string = null;
+
   @Option(name="--testTimeSec", aliases={"--testTime"}, metaVar="TIME",
       usage="How long should the benchmark run for.")
+
   private int _testRunTimeSec = 5 * 60;
 
   private static class MetricsState {
@@ -244,21 +254,42 @@ public class Main {
       _ackers = 0;
     }
 
+
+
+    /*TopologyBuilder builder = new TopologyBuilder();
+    builder.setSpout("random-sentence-spout", new TupleGeneratorSpout(tuple_size_kb), spout_parallelism).setNumTasks(spout_parallelism);
+    BoltDeclarer bolt = (BoltDeclarer)builder.setBolt("performance-logging-bolt", new PerformanceLoggingBolt(), bolt_parallelism).setNumTasks(bolt_parallelism);
+    if ("locality-aware".equals(GROUPING_TYPE)) {
+      bolt.customGrouping("random-sentence-spout", new LocalityAwareGrouping(zookeeper_connect_string));
+    } else if ("shuffle".equals(GROUPING_TYPE)) {
+      bolt.shuffleGrouping("random-sentence-spout");
+    } else if ("my-shuffle".equals(GROUPING_TYPE)) {
+      bolt.customGrouping("random-sentence-spout", new MyShuffleGrouping());
+    } else {
+      if (!"local-or-shuffle".equals(GROUPING_TYPE)) {
+        logger.error("GROUPING TYPE ERROR: " + GROUPING_TYPE);
+        return;
+      }
+
+      bolt.localOrShuffleGrouping("random-sentence-spout");
+    } */
     try {
       for (int topoNum = 0; topoNum < _numTopologies; topoNum++) {
         TopologyBuilder builder = new TopologyBuilder();
         LOG.info("Adding in "+_spoutParallel+" spouts");
-        builder.setSpout("messageSpout", 
-            new SOLSpout(_messageSize, _ackEnabled), _spoutParallel);
+        builder.setSpout("messageSpout",
+                new SOLSpout(_messageSize, _ackEnabled), _spoutParallel);
+
+        BoltDeclarer bolt = (BoltDeclarer)builder.setBolt("messageBolt1" , new SOLBolt(), _boltParallel).customGrouping("messageSpout", new LocalityAwareGrouping(zookeeper_connect_string));
         LOG.info("Adding in "+_boltParallel+" bolts");
-        builder.setBolt("messageBolt1", new SOLBolt(), _boltParallel)
-            .shuffleGrouping("messageSpout");
-        for (int levelNum = 2; levelNum < _numLevels; levelNum++) {
+        //builder.setBolt("messageBolt1", new SOLBolt(), _boltParallel);
+
+                //.shuffleGrouping("messageSpout");
+        for (int levelNum = 2; levelNum <= _numLevels; levelNum++) {
           LOG.info("Adding in "+_boltParallel+" bolts at level "+levelNum);
           builder.setBolt("messageBolt"+levelNum, new SOLBolt(), _boltParallel)
-              .shuffleGrouping("messageBolt"+(levelNum - 1));
+                  .shuffleGrouping("messageBolt"+(levelNum - 1));
         }
-        builder.setBolt("countBolt", new CountBolt(), _boltParallel).shuffleGrouping("messageBolt"+(_numLevels-1));
 
         Config conf = new Config();
         conf.setDebug(_debug);
@@ -286,7 +317,7 @@ public class Main {
       }
     }
   }
-  
+
   public static void main(String[] args) throws Exception {
     new Main().realMain(args);
   }
