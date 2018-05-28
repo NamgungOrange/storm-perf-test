@@ -1,0 +1,14 @@
+<component name="libraryTable">
+  <library name="Maven: org.apache.storm:storm-client:2.0.0-SNAPSHOT">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/storm/storm-client/2.0.0-SNAPSHOT/storm-client-2.0.0-20170519.203612-2.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/storm/storm-client/2.0.0-SNAPSHOT/storm-client-2.0.0-20170519.203612-2-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/storm/storm-client/2.0.0-SNAPSHOT/storm-client-2.0.0-20170519.203612-2-sources.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/storm/storm-core/2.0.0-SNAPSHOT/storm-core-2.0.0-SNAPSHOT.jar!/" />
+    </SOURCES>
+  </library>
+</component>

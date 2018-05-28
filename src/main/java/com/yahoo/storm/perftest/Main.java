@@ -16,12 +16,13 @@
 
 package com.yahoo.storm.perftest;
 
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
+//import jdk.internal.jline.internal.Log;
 import org.apache.storm.topology.BoltDeclarer;
-import org.locality.aware.grouping.MyShuffleGrouping;
-import org.locality.aware.grouping.PerformanceLoggingBolt;
-import org.locality.aware.grouping.TupleGeneratorSpout;
+import org.locality.aware.grouping.LocalityAwareGrouping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.kohsuke.args4j.CmdLineException;
@@ -42,7 +43,7 @@ import org.apache.storm.generated.TopologyInfo;
 import org.apache.storm.generated.ExecutorSummary;
 import org.apache.storm.generated.ExecutorStats;
 import org.apache.storm.generated.SpoutStats;
-import org.locality.aware.grouping.LocalityAwareGrouping;
+
 
 
 public class Main {
@@ -113,8 +114,8 @@ public class Main {
     int slotsUsed = 0;
     long lastTime = 0;
   }
-
-  public void metrics(Nimbus.Client client, int size, int poll, int total) throws Exception {
+  //public void metrics(Nimbus.Client client, int size, int poll, int total) throws Exception {
+  public void metrics(Nimbus.Iface client, int size, int poll, int total) throws Exception {
     System.out.println("status\ttopologies\ttotalSlots\tslotsUsed\ttotalExecutors\texecutorsWithMetrics\ttime\ttime-diff ms\ttransferred\tthroughput (MB/s)\ttotal Failed");
     MetricsState state = new MetricsState();
     long pollMs = poll * 1000;
@@ -125,6 +126,7 @@ public class Main {
     long sleepTime;
     long wakeupTime;
     while (metrics(client, size, now, state, "WAITING")) {
+
       now = System.currentTimeMillis();
       cycle = (now - startTime)/pollMs;
       wakeupTime = startTime + (pollMs * (cycle + 1));
@@ -156,8 +158,8 @@ public class Main {
       now = System.currentTimeMillis();
     } while (now < end);
   }
-
-  public boolean metrics(Nimbus.Client client, int size, long now, MetricsState state, String message) throws Exception {
+  public boolean metrics(Nimbus.Iface client, int size, long now, MetricsState state, String message) throws Exception {
+ // public boolean metrics(Nimbus.Client client, int size, long now, MetricsState state, String message) throws Exception {
     ClusterSummary summary = client.getClusterInfo();
     long time = now - state.lastTime;
     state.lastTime = now;
@@ -172,6 +174,7 @@ public class Main {
     state.slotsUsed = totalUsedSlots;
 
     int numTopologies = summary.get_topologies_size();
+    double compLat = 0.0D;
     long totalTransferred = 0;
     int totalExecutors = 0;
     int executorsWithMetrics = 0;
@@ -185,6 +188,7 @@ public class Main {
         if (stats != null) {
           if (stats.get_specific().is_set_spout()) {
             SpoutStats ss = stats.get_specific().get_spout();
+            compLat = getSpoutStatDoubleValueFromMap(ss.get_complete_ms_avg(), ":all-time").doubleValue();
             Map<String, Long> failedMap = ss.get_failed().get(":all-time");
             if (failedMap != null) {
               for (String key: failedMap.keySet()) {
@@ -213,19 +217,36 @@ public class Main {
     }
     long transferredDiff = totalTransferred - state.transferred;
     state.transferred = totalTransferred;
-    double throughput = (transferredDiff == 0 || time == 0) ? 0.0 : (transferredDiff * size)/(1024.0 * 1024.0)/(time/1000.0);
-    System.out.println(message+"\t"+numTopologies+"\t"+totalSlots+"\t"+totalUsedSlots+"\t"+totalExecutors+"\t"+executorsWithMetrics+"\t"+now+"\t"+time+"\t"+transferredDiff+"\t"+throughput+"\t"+totalFailed);
+    double throughput = (transferredDiff == 0 || time
+            == 0) ? 0.0 : (transferredDiff * size)/(1024.0 * 1024.0)/(time/1000.0);
+    throughput = Math.round(throughput*10000d)/10000d;
+    System.out.println(message + "\t\t" + numTopologies + "\t" + totalSlots + "\t\t" + totalUsedSlots + "\t\t"
+            + totalExecutors + "\t\t" + executorsWithMetrics + "\t\t" + now + "\t" + time + "\t\t" + transferredDiff
+            + "\t\t" + throughput + "\t\t" + totalFailed + "\t\t" + compLat);
     if ("WAITING".equals(message)) {
       //System.err.println(" !("+totalUsedSlots+" > 0 && "+slotsUsedDiff+" == 0 && "+totalExecutors+" > 0 && "+executorsWithMetrics+" >= "+totalExecutors+")");
     }
     return !(totalUsedSlots > 0 && slotsUsedDiff == 0 && totalExecutors > 0 && executorsWithMetrics >= totalExecutors);
-  } 
-
+  }
+  public static Double getSpoutStatDoubleValueFromMap(Map<String, Map<String, Double>> map, String statName) {
+    Double statValue = Double.valueOf(0.0D);
+    Map intermediateMap = (Map) map.get(statName);
+    if (intermediateMap != null) {
+      Set key = intermediateMap.keySet();
+      if (key.size() > 0) {
+        Iterator itr = key.iterator();
+        statValue = (Double) intermediateMap.get(itr.next());
+      }
+    }
+    return statValue;
+  }
  
   public void realMain(String[] args) throws Exception {
     Map clusterConf = Utils.readStormConfig();
     clusterConf.putAll(Utils.readCommandLineOpts());
+    //Nimbus.Iface client = NimbusClient.getConfiguredClient(clusterConf).getClient();
     Nimbus.Client client = NimbusClient.getConfiguredClient(clusterConf).getClient();
+
 
     CmdLineParser parser = new CmdLineParser(this);
     parser.setUsageWidth(80);
@@ -273,6 +294,15 @@ public class Main {
 
       bolt.localOrShuffleGrouping("random-sentence-spout");
     } */
+
+    /*
+    1MB 튜플을 8개의 스파우트가 8개의 볼트로 60분간 전송하는 지역성고려 그룹핑 커맨드
+    storm jar localgrouping-0.0.1-SNAPSHOT.jar knu.cs.dke.i2am.grouping.localgrouping.LocalityGroupingTestTopology swson-locality-benchmark-1-3-5
+    locality-aware 1024 8 8 60 MN:2181,SN01:2181,SN02:2181,SN03:2181,SN04:2181,SN05:2181,SN06:2181,SN07:2181,SN08:2181
+     */
+
+
+    LOG.info("#######################ZK: " + zookeeper_connect_string);
     try {
       for (int topoNum = 0; topoNum < _numTopologies; topoNum++) {
         TopologyBuilder builder = new TopologyBuilder();
@@ -280,15 +310,18 @@ public class Main {
         builder.setSpout("messageSpout",
                 new SOLSpout(_messageSize, _ackEnabled), _spoutParallel);
 
-        BoltDeclarer bolt = (BoltDeclarer)builder.setBolt("messageBolt1" , new SOLBolt(), _boltParallel).customGrouping("messageSpout", new LocalityAwareGrouping(zookeeper_connect_string));
-        LOG.info("Adding in "+_boltParallel+" bolts");
-        //builder.setBolt("messageBolt1", new SOLBolt(), _boltParallel);
+        BoltDeclarer bolt = (BoltDeclarer)builder.setBolt("messageBolt1" , new SOLBolt(), _boltParallel)
+                .customGrouping("messageSpout", new LocalityAwareGrouping(zookeeper_connect_string));
 
-                //.shuffleGrouping("messageSpout");
+     //BoltDeclarer bolt = (BoltDeclarer)builder.setBolt("messageBolt1", new SOLBolt(), _boltParallel).shuffleGrouping("");
+      LOG.info("Adding in "+_boltParallel+" bolts");
+
         for (int levelNum = 2; levelNum <= _numLevels; levelNum++) {
           LOG.info("Adding in "+_boltParallel+" bolts at level "+levelNum);
-          builder.setBolt("messageBolt"+levelNum, new SOLBolt(), _boltParallel)
-                  .shuffleGrouping("messageBolt"+(levelNum - 1));
+          BoltDeclarer bolts = (BoltDeclarer)builder.setBolt("messageBolt"+levelNum , new SOLBolt(), _boltParallel)
+                  .customGrouping("messageBolt"+(levelNum - 1), new LocalityAwareGrouping(zookeeper_connect_string));
+          /*builder.setBolt("messageBolt"+levelNum, new SOLBolt(), _boltParallel)
+                  .shuffleGrouping("messageBolt"+(levelNum - 1));*/
         }
 
         Config conf = new Config();
